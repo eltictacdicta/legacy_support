@@ -20,6 +20,10 @@ use FSFramework\Event\TwigInitEvent;
  * Provides:
  * - RainTPL to Twig translator for legacy .html templates
  * - PHP functions as Twig functions (used by translated RainTPL templates)
+ * - Legacy frontend assets (jQuery UI, bootstrap-datepicker, autocomplete,
+ *   shake, and the legacy base.js helpers moved out of core view/js/base.js)
+ *   injected into the global header via the head_extra_js /
+ *   head_extra_css globals, for old plugin views that still need them
  */
 class Init
 {
@@ -39,10 +43,53 @@ class Init
             $event->setLoader(new \FSFramework\Plugins\legacy_support\Template\LegacyFilesystemLoader($loader));
         });
 
-        // Subscribe to Twig init to register PHP functions
+        // Subscribe to Twig init to register PHP functions and legacy asset globals
         $dispatcher->addListener(TwigInitEvent::NAME, function (TwigInitEvent $event) {
-            $this->registerPhpFunctions($event->getTwig());
+            $twig = $event->getTwig();
+            $this->registerPhpFunctions($twig);
+            $twig->addGlobal('head_extra_js', self::legacyHeadJs());
+            $twig->addGlobal('head_extra_css', self::legacyHeadCss());
         });
+    }
+
+    /**
+     * Legacy JS assets for the global header, in load order. bootstrap-datepicker
+     * deliberately loads BEFORE jquery-ui.min.js, matching the order the removed
+     * core header tags used, so $.fn.datepicker keeps resolving to the jQuery UI
+     * widget (same winner as before) and old plugin behavior stays equivalent.
+     *
+     * legacy-base.js (dialog/modal/tooltip helpers moved from core base.js)
+     * loads last, after legacy-init.js and still before core base.js, like the
+     * old core base.js did.
+     *
+     * URLs are root-relative and rendered with the FS_PATH prefix in
+     * header.html.twig, same scheme as the business_data_js global.
+     *
+     * @return list<string>
+     */
+    public static function legacyHeadJs(): array
+    {
+        return [
+            'view/js/bootstrap-datepicker.js',
+            'view/js/jquery-ui.min.js',
+            'view/js/jquery.autocomplete.min.js',
+            'view/js/jquery.ui.shake.js',
+            'plugins/legacy_support/view/js/legacy-init.js',
+            'plugins/legacy_support/view/js/legacy-base.js',
+        ];
+    }
+
+    /**
+     * Legacy CSS assets for the global header (bootstrap-datepicker + jQuery UI
+     * datepicker skins). Root-relative, same URL scheme as legacyHeadJs().
+     *
+     * @return list<string>
+     */
+    public static function legacyHeadCss(): array
+    {
+        return [
+            'view/css/datepicker.css',
+        ];
     }
 
     /**
