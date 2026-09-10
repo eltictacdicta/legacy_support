@@ -32,6 +32,7 @@ class Init
     public function init(): void
     {
         self::emitDeprecationNotice();
+        self::registerLegacyEditClasses();
         $dispatcher = FSEventDispatcher::getInstance();
 
         // Subscribe to the Twig loader initialization event
@@ -49,6 +50,25 @@ class Init
             $this->registerPhpFunctions($twig);
             $twig->addGlobal('head_extra_js', self::legacyHeadJs());
             $twig->addGlobal('head_extra_css', self::legacyHeadCss());
+        });
+    }
+
+    /**
+     * Registra un autoloader para las clases globales del auto-CRUD legacy
+     * (fs_edit_controller / fs_edit_form), movidas aquí desde el core. Solo
+     * existen cuando este plugin está activo; el core ya no las conoce.
+     */
+    private static function registerLegacyEditClasses(): void
+    {
+        spl_autoload_register(static function (string $class): void {
+            $legacyEditors = [
+                'fs_edit_controller' => __DIR__ . '/base/fs_edit_controller.php',
+                'fs_edit_form' => __DIR__ . '/base/fs_edit_form.php',
+            ];
+
+            if (isset($legacyEditors[$class]) && is_file($legacyEditors[$class])) {
+                require_once $legacyEditors[$class];
+            }
         });
     }
 

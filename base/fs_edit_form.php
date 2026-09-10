@@ -1,0 +1,225 @@
+<?php
+declare(strict_types=1);
+/**
+ * This file is part of FSFramework originally based on Facturascript 2017
+ * Copyright (C) 2025 Javier Trujillo <mistertekcom@gmail.com>
+ * Copyright (C) 2013-2020 Carlos Garcia Gomez <neorazorx@gmail.com> (lead developer of Facturascript)
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/**
+ * Description of fs_edit_form
+ *
+ * @author Carlos García Gómez <neorazorx@gmail.com>
+ */
+class fs_edit_form
+{
+
+    /**
+     *
+     * @var array
+     */
+    public $columns = [];
+
+    /**
+     *
+     * @var array
+     */
+    private $model_objects = [];
+
+    /**
+     * 
+     * @param fs_edit_form $old_decoration
+     */
+    public function __construct($old_decoration = null)
+    {
+        if ($old_decoration) {
+            $this->columns = $old_decoration->columns;
+        }
+    }
+
+    /**
+     * 
+     * @param string $col_name
+     * @param string $type
+     * @param string $label
+     * @param int    $num_cols
+     * @param bool   $required
+     * @param array  $values
+     */
+    public function add_column($col_name, $type = 'string', $label = '', $num_cols = 2, $required = false, $values = [])
+    {
+        $this->columns[$col_name] = [
+            'label' => empty($label) ? $col_name : $label,
+            'num_cols' => $num_cols,
+            'required' => $required,
+            'type' => $type,
+            'values' => $values,
+        ];
+    }
+
+    /**
+     * 
+     * @param string $col_name
+     * @param array  $values
+     * @param string $label
+     * @param int    $num_cols
+     * @param bool   $required
+     */
+    public function add_column_select($col_name, $values, $label = '', $num_cols = 2, $required = false)
+    {
+        $this->add_column($col_name, 'select', $label, $num_cols, $required, $values);
+    }
+
+    /**
+     * 
+     * @param string            $col_name
+     * @param array             $col_config
+     * @param fs_extended_model $model
+     *
+     * @return string
+     */
+    public function show($col_name, $col_config, $model)
+    {
+        $label = self::escape($col_config['label']);
+        $html = '<div class="form-group">' . $label . ':';
+        $required = $col_config['required'] ? ' required=""' : '';
+        $fieldName = self::escape($col_name);
+
+        switch ($col_config['type']) {
+            case 'bool':
+                $checked = $model->{$col_name} ? ' checked=""' : '';
+                $html = '<div class="checkbox"><label><input type="checkbox" name="' . $fieldName
+                    . '" value="TRUE"' . $checked . '/> ' . $label . '</label>';
+                break;
+
+            case 'date':
+                $html .= '<div class="input-group">'
+                    . '<span class="input-group-addon">'
+                    . '<span class="glyphicon glyphicon-calendar"></span>'
+                    . '</span>'
+                    . '<input class="form-control" type="date" name="' . $fieldName
+                    . '" value="' . self::escape(self::date_to_iso($model->{$col_name})) . '" autocomplete="off"' . $required . '/></div>';
+                break;
+
+            case 'money':
+            case 'number':
+                $html .= '<input class="form-control" type="number" step="any" name="' . $fieldName
+                    . '" value="' . self::escape($model->{$col_name}) . '" autocomplete="off"' . $required . '/>';
+                break;
+
+            case 'select':
+                $html .= $this->show_select($col_name, $col_config, $model);
+                break;
+
+            case 'textarea':
+                $html .= '<textarea class="form-control" name="' . $fieldName . '"' . $required . '>'
+                    . self::escape($model->{$col_name}) . '</textarea>';
+                break;
+
+            default:
+                $html .= '<input class="form-control" type="text" name="' . $fieldName
+                    . '" value="' . self::escape($model->{$col_name}) . '" autocomplete="off"' . $required . '/>';
+        }
+
+        $html .= '</div>';
+        return $html;
+    }
+
+    /**
+     * 
+     * @param string            $col_name
+     * @param array             $col_config
+     * @param fs_extended_model $model
+     *
+     * @return string
+     */
+    protected function show_select($col_name, $col_config, $model)
+    {
+        $required = $col_config['required'] ? ' required=""' : '';
+        $html = '<select name="' . self::escape($col_name) . '" class="form-control"' . $required . '>';
+
+        foreach ($col_config['values'] as $key => $value) {
+            $option = '<option value="' . self::escape($key) . '"';
+            if ($model->{$col_name} == $key) {
+                $option .= ' selected=""';
+            }
+
+            $html .= $option . '>' . self::escape($value) . '</option>';
+        }
+
+        $html .= '</select>';
+        return $html;
+    }
+
+    /**
+     * Escapa un valor para insertarlo de forma segura en HTML o atributos.
+     *
+     * @param mixed $value
+     */
+    private static function escape($value): string
+    {
+        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * 
+     * @param string $model_class_name
+     * @param string $code
+     * 
+     * @return mixed
+     */
+    protected function get_model_object($model_class_name, $code)
+    {
+        if (isset($this->model_objects[$model_class_name][$code])) {
+            return $this->model_objects[$model_class_name][$code];
+        }
+
+        $model = new $model_class_name();
+        $object = $model->get($code);
+        if ($object) {
+            $this->model_objects[$model_class_name][$code] = $object;
+            return $object;
+        }
+
+        return $model;
+    }
+
+    /**
+     * Converts a model date string (d-m-Y) to the ISO format (Y-m-d) required
+     * by native <input type="date"> fields. Strict: bare strtotime() parses
+     * "5-1-2026" ambiguously, so only the exact d-m-Y shape passes checkdate()
+     * and is converted; anything else (empty, already ISO, invalid) is
+     * returned unchanged. Same semantics as the Twig date_iso filter.
+     *
+     * @param mixed $value
+     *
+     * @return mixed
+     */
+    private static function date_to_iso($value)
+    {
+        if (!is_string($value) || $value === '') {
+            return $value;
+        }
+
+        if (preg_match('/^(\d{1,2})-(\d{1,2})-(\d{4})$/', $value, $matches)
+            && checkdate((int) $matches[2], (int) $matches[1], (int) $matches[3])
+        ) {
+            return sprintf('%04d-%02d-%02d', $matches[3], $matches[2], $matches[1]);
+        }
+
+        return $value;
+    }
+}
