@@ -108,12 +108,22 @@ class LegacySupportTest extends TestCase
         $this->assertStringContainsString("addGlobal('head_extra_css', self::legacyHeadCss())", $source);
     }
 
+    /**
+     * The base.js move shipped with plugin version 1.2.0, and clients only
+     * pick up the update when the declared version is at least that high.
+     * The previous exact-match form ('1.2.0') failed on every later release
+     * even though the move was still shipped, so the invariant is a lower
+     * bound rather than an exact value.
+     */
     public function testPluginVersionIsBumpedTo120ForTheBaseJsMove(): void
     {
         $metadata = parse_ini_file(FS_FOLDER . '/plugins/legacy_support/fsframework.ini', false, INI_SCANNER_TYPED);
 
         $this->assertIsArray($metadata);
-        $this->assertSame('1.2.0', $metadata['version'] ?? null);
+        $this->assertTrue(
+            version_compare((string) ($metadata['version'] ?? ''), '1.2.0', '>='),
+            'legacy_support must declare version >= 1.2.0 so the base.js move reaches clients'
+        );
     }
 
     // =====================================================================
